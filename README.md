@@ -1,2 +1,2 @@
 # GalUpTs
-galgame unpack script auto translate
+对已解包的格式化JSON文件实行ChatGPT自动化翻译
