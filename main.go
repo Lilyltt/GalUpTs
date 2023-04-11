@@ -1,117 +1,164 @@
 package main
 
 import (
-	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/sashabaranov/go-openai"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
 
-const (
-	bufferSize = 5000 // 定义读取文件时的缓冲区大小
-)
+type InputMessage struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
 
 func main() {
-	//读取apikey
-	file2, err := os.Open("apikey.txt")
-	defer file2.Close()
-	sc2 := bufio.NewScanner(file2)
+	//输入apikey
+	fmt.Println("[INFO]请输入OpenAi apikey:")
 	var apikey string
-	for sc2.Scan() {
-		apikey += sc2.Text()
-	}
-	if err != nil || apikey == "" {
-		fmt.Println("[ERROR]请将包含apikey的apikey.txt放到程序根目录下!")
+	fmt.Scanln(&apikey)
+	if apikey == "" {
+		fmt.Println("[ERROR]必须输入apikey!程序退出")
+		fmt.Scanln()
 		os.Exit(0)
 	}
-	//读取翻译头
-	file3, err := os.Open("head.txt")
-	defer file3.Close()
-	sc3 := bufio.NewScanner(file3)
-	var head string
-	for sc3.Scan() {
-		head += sc3.Text()
+	//配置代理
+	fmt.Println("[INFO]请输入HTTP代理地址 http://localhost:端口号 ,留空则不设置代理")
+	var proxy string
+	fmt.Scanln(&proxy)
+	var client *openai.Client
+	if proxy != "" {
+		client = SetProxy(apikey, proxy)
+		fmt.Println("[INFO]代理设置成功,为" + proxy)
+	} else {
+		client = openai.NewClient(apikey)
+		fmt.Println("[INFO]留空,跳过设置代理")
 	}
-	if err != nil || head == "" {
-		fmt.Println("[WARN]未自定义翻译头,已设置默认值为 翻译下面这段话为简体中文,保留原格式 ,如需修改请将包含翻译头的head.txt放到程序根目录下!")
-		head = "翻译下面这段话为简体中文,保留原格式 "
-	}
-	// 创建翻译文件
-	fileresult, err3 := os.Create("translation.txt")
-	if err3 != nil {
-		panic(err3)
-	}
-	defer fileresult.Close()
-	writer := bufio.NewWriter(fileresult)
-	file, err := os.Open("input.txt")
+	messages := make([]openai.ChatCompletionMessage, 0)
+	//读取文件
+	fmt.Println("[INFO]开始翻译,如果输出格式不是name|message请用ctrl+c停止程序并重新运行")
+	// 读取 input.json 文件
+	file, err := os.Open("input.json")
 	if err != nil {
-		fmt.Println("[ERROR]请将包含需要翻译内容的input.txt放到程序根目录下!")
-		os.Exit(0)
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		return
 	}
 	defer file.Close()
-	fmt.Println("[INFO]已读取到apikey:" + apikey + "\n[INFO]当前使用模型:GPT3Dot5Turbo\n[INFO]当前翻译头:" + head + "\n[INFO]按下enter开始翻译")
-	fmt.Scanln()
-	fmt.Println("[INFO]已开始翻译,请耐心等待,翻译结果将实时输出至控制台和translate.txt")
-	//翻译
-	var count = 1
-	var buffer strings.Builder              // 用于存放读取到的字符
-	var leftBraceCount, rightBraceCount int // 记录当前读到的{和},的数量
-	sc1 := bufio.NewScanner(file)
-	for sc1.Scan() {
-		// 读取一行并存放到buffer中
-		buffer.WriteString(sc1.Text() + "\n")
-		// 在当前行中查找{和},
-		leftBraceCount += strings.Count(sc1.Text(), "{")
-		rightBraceCount += strings.Count(sc1.Text(), "},")
+	jsonData, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		return
+	}
+	var inputRecords []InputMessage
+	err = json.Unmarshal([]byte(jsonData), &inputRecords)
+	if err != nil {
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		return
+	}
+	var result string
+	var count int
+	for _, inputRecord := range inputRecords {
+		outputString := ""
+		if inputRecord.Name != "" {
+			outputString += inputRecord.Name + "|"
+		}
+		outputString += inputRecord.Message
+		//翻译
+		fmt.Println("[INFO]原文: " + outputString)
+	tsstart:
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleUser,
+			Content: "trasnlate next line to chinese:\n" + outputString,
+		})
 
-		// 判断当前{和}的数量是否相等，并且是否达到20个
-		if leftBraceCount == rightBraceCount && leftBraceCount == 20 {
-			// 输出读取到的内容
-			source := head + buffer.String() + "\n\n"
-			count++
-			// 写入新文件
-			_, err = writer.WriteString(ChatGPTTranslation(source, apikey))
-			if err != nil {
-				panic(err)
-			}
-			err = writer.Flush()
-			if err != nil {
-				panic(err)
-			}
-			fmt.Print(ChatGPTTranslation(source, apikey) + ",\n")
-			// 清空buffer
-			buffer.Reset()
-			// 重置{和}的数量
-			leftBraceCount = 0
-			rightBraceCount = 0
-			//提示
-			fmt.Printf("[INFO]已生成第%d段,将进行下一段\n", count-1)
+		resp, err := client.CreateChatCompletion(
+			context.Background(),
+			openai.ChatCompletionRequest{
+				Model:    openai.GPT3Dot5Turbo,
+				Messages: messages,
+			},
+		)
+
+		if err != nil {
+			fmt.Printf("[ERROR]翻译出现错误,尝试重新翻译该句,如果持续出错请重启持续或检查代理设置: %v\n", err)
+			goto tsstart
+		}
+
+		content := resp.Choices[0].Message.Content
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleAssistant,
+			Content: content,
+		})
+		//处理
+		content = strings.Replace(content, "：", "|", -1)
+		content = strings.Replace(content, ":", "|", -1)
+		fmt.Println("[INFO]译文: " + content)
+		count++
+		if count == 20 {
+			count = 0
+			messages = nil
+			fmt.Println("[WARN]达到最大记忆量,已清除对话记录,请注意该句附近的翻译效果")
+		}
+		result = result + content + "\n"
+	}
+	fmt.Println("[INFO]翻译完毕,正在创建新文件")
+	// 构建JSON数组
+	// 解析结果并输出到 Translate.json
+	var outputMessages []InputMessage
+	for _, entry := range strings.Split(result, "\n") {
+		parts := strings.SplitN(entry, "|", 2)
+		if len(parts) > 1 {
+			outputMessages = append(outputMessages, InputMessage{Name: parts[0], Message: parts[1]})
+		} else {
+			outputMessages = append(outputMessages, InputMessage{Message: entry})
 		}
 	}
-	if err := sc1.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "Reading standard input:", err)
-	}
-	fmt.Printf("[INFO]翻译完成,共翻译%d段,请检查末尾是否缺失,格式是否错误\n", count)
-}
-func ChatGPTTranslation(message string, apikey string) (result string) {
-	client := openai.NewClient(apikey)
-	resp, err := client.CreateChatCompletion(
-		context.Background(),
-		openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: message,
-				},
-			},
-		},
-	)
 
+	outputBytes, err := json.Marshal(outputMessages)
 	if err != nil {
-		fmt.Printf("ChatCompletion error: %v\n", err)
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		return
 	}
-	return resp.Choices[0].Message.Content
+
+	err = ioutil.WriteFile("Translate.json", outputBytes, 0644)
+	if err != nil {
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		return
+	}
+
+	fmt.Println("[INFO]JSON格式化成功，已写入translate.json文件")
+	fmt.Scanln()
+}
+func SetProxy(apikey string, proxy string) *openai.Client {
+	config := openai.DefaultConfig(apikey)
+	proxyUrl, err := url.Parse(proxy)
+	if err != nil {
+		fmt.Print("[ERROR]")
+		fmt.Print(err)
+		fmt.Scanln()
+		os.Exit(0)
+	}
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyUrl),
+	}
+	config.HTTPClient = &http.Client{
+		Transport: transport,
+	}
+	client := openai.NewClientWithConfig(config)
+	return client
 }
