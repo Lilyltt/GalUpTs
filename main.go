@@ -1,26 +1,21 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/sashabaranov/go-openai"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
+	"path/filepath"
 )
 
-type InputMessage struct {
-	Name    string `json:"name"`
-	Message string `json:"message"`
-}
-
 func main() {
-	//输入apikey
+	//获取apikey
+	fmt.Println("=================================================\n[INFO]使用前须知:\n1.你需要来自OpenAi官方的apikey\n2.你需要一个非cn的网络环境或通过 http://localhost:端口号 设置代理\n3.你需要确认你待翻译文件的格式,当前支持 通过VNTEXT提取的KRKR-SCN-JSON文件 和 无格式一行一句的TXT文件\n4.把你所有需要翻译的文件选择一个目录放好,并记下地址\n5.出错请详细阅读报错+善用搜索引擎\n6.按下enter继续\n=================================================")
+	fmt.Scanln()
+	var apikey string //apikey
 	fmt.Println("[INFO]请输入OpenAi apikey:")
-	var apikey string
 	fmt.Scanln(&apikey)
 	if apikey == "" {
 		fmt.Println("[ERROR]必须输入apikey!程序退出")
@@ -31,7 +26,7 @@ func main() {
 	fmt.Println("[INFO]请输入HTTP代理地址 http://localhost:端口号 ,留空则不设置代理")
 	var proxy string
 	fmt.Scanln(&proxy)
-	var client *openai.Client
+	var client *openai.Client //注册客户端
 	if proxy != "" {
 		client = SetProxy(apikey, proxy)
 		fmt.Println("[INFO]代理设置成功,为" + proxy)
@@ -39,109 +34,59 @@ func main() {
 		client = openai.NewClient(apikey)
 		fmt.Println("[INFO]留空,跳过设置代理")
 	}
-	messages := make([]openai.ChatCompletionMessage, 0)
-	//读取文件
-	fmt.Println("[INFO]开始翻译,如果输出格式不是name|message请用ctrl+c停止程序并重新运行")
-	// 读取 input.json 文件
-	file, err := os.Open("input.json")
-	if err != nil {
-		fmt.Print("[ERROR]")
-		fmt.Print(err)
+	//定义翻译头
+	var translatehead string
+	translatehead = "You are a translator. The following passages are from the Japanese GalGame dialogue. Please translate them into simplified Chinese and keep the original format. Do not reply to this sentence or translate punctuation mark"
+	fmt.Println("[INFO]翻译头已设定,暂不支持修改")
+	//获取输入输出目录
+	var inputdir string  //输入目录
+	var outputdir string //输出目录
+	fmt.Println("[INFO]请输入源文件目录 例如:D:\\GalUpTs\\input\\")
+	fmt.Scanln(&inputdir)
+	fmt.Println("[INFO]请输入输出目录 例如:D:\\GalUpTs\\output\\")
+	fmt.Scanln(&outputdir)
+	//选择
+	var choice string //文件格式选择
+	fmt.Println("[INFO]请选择源文件格式:\n1.通过VNTEXT提取的KRKR-SCN-JSON文件\n2.一行一句的TXT文件(无格式)")
+	fmt.Scanln(&choice)
+	if choice == "" {
+		fmt.Println("[ERROR]请输入合法的数字编号!程序退出")
 		fmt.Scanln()
-		return
+		os.Exit(0)
 	}
-	defer file.Close()
-	jsonData, err := ioutil.ReadAll(file)
-	if err != nil {
-		fmt.Print("[ERROR]")
-		fmt.Print(err)
-		fmt.Scanln()
-		return
-	}
-	var inputRecords []InputMessage
-	err = json.Unmarshal([]byte(jsonData), &inputRecords)
-	if err != nil {
-		fmt.Print("[ERROR]")
-		fmt.Print(err)
-		fmt.Scanln()
-		return
-	}
-	var result string
-	var count int
-	for _, inputRecord := range inputRecords {
-		outputString := ""
-		if inputRecord.Name != "" {
-			outputString += inputRecord.Name + "|"
-		}
-		outputString += inputRecord.Message
-		//翻译
-		fmt.Println("[INFO]原文: " + outputString)
-	tsstart:
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleUser,
-			Content: "trasnlate next line to chinese:\n" + outputString,
-		})
-
-		resp, err := client.CreateChatCompletion(
-			context.Background(),
-			openai.ChatCompletionRequest{
-				Model:    openai.GPT3Dot5Turbo,
-				Messages: messages,
-			},
-		)
-
+	switch choice {
+	case "1": // TsJson翻译
+		//扫描目录
+		files, err := ioutil.ReadDir(inputdir)
 		if err != nil {
-			fmt.Printf("[ERROR]翻译出现错误,尝试重新翻译该句,如果持续出错请重启持续或检查代理设置: %v\n", err)
-			goto tsstart
+			fmt.Println("[ERROR]读取目录出错!程序终止")
+			fmt.Scanln()
+			os.Exit(0)
 		}
-
-		content := resp.Choices[0].Message.Content
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleAssistant,
-			Content: content,
-		})
-		//处理
-		content = strings.Replace(content, "：", "|", -1)
-		content = strings.Replace(content, ":", "|", -1)
-		fmt.Println("[INFO]译文: " + content)
-		count++
-		if count == 20 {
-			count = 0
-			messages = nil
-			fmt.Println("[WARN]达到最大记忆量,已清除对话记录,请注意该句附近的翻译效果")
+		for _, file := range files {
+			if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
+				fmt.Println("[INFO]开始翻译:" + file.Name())
+				TsJson(client, file.Name(), inputdir, outputdir, translatehead)
+				fmt.Println("[INFO]" + file.Name() + "翻译完成")
+			}
 		}
-		result = result + content + "\n"
-	}
-	fmt.Println("[INFO]翻译完毕,正在创建新文件")
-	// 构建JSON数组
-	// 解析结果并输出到 Translate.json
-	var outputMessages []InputMessage
-	for _, entry := range strings.Split(result, "\n") {
-		parts := strings.SplitN(entry, "|", 2)
-		if len(parts) > 1 {
-			outputMessages = append(outputMessages, InputMessage{Name: parts[0], Message: parts[1]})
-		} else {
-			outputMessages = append(outputMessages, InputMessage{Message: entry})
+	case "2": //TsTxt翻译
+		//扫描目录
+		files, err := ioutil.ReadDir(inputdir)
+		if err != nil {
+			fmt.Println("[ERROR]读取目录出错!程序终止")
+			fmt.Scanln()
+			os.Exit(0)
+		}
+		for _, file := range files {
+			if !file.IsDir() && filepath.Ext(file.Name()) == ".txt" {
+				fmt.Println("[INFO]开始翻译:" + file.Name())
+				TsTxt(client, file.Name(), inputdir, outputdir, translatehead)
+				fmt.Println("[INFO]" + file.Name() + "翻译完成")
+			}
 		}
 	}
-
-	outputBytes, err := json.Marshal(outputMessages)
-	if err != nil {
-		fmt.Print("[ERROR]")
-		fmt.Print(err)
-		fmt.Scanln()
-		return
-	}
-
-	err = ioutil.WriteFile("Translate.json", outputBytes, 0644)
-	if err != nil {
-		fmt.Print("[ERROR]")
-		fmt.Print(err)
-		fmt.Scanln()
-		return
-	}
-
-	fmt.Println("[INFO]JSON格式化成功，已写入translate.json文件")
+	fmt.Println("[INFO]程序执行完成,请检查你的输出目录" + outputdir + "!")
 	fmt.Scanln()
 }
 func SetProxy(apikey string, proxy string) *openai.Client {
