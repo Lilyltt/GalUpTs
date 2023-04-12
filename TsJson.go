@@ -45,6 +45,14 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		fmt.Scanln()
 		return
 	}
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleSystem,
+		Content: translatehead,
+	})
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleSystem,
+		Content: translatehead,
+	})
 	var result string
 	var count int
 	for _, inputRecord := range inputRecords {
@@ -54,10 +62,6 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		}
 		outputString += inputRecord.Message
 		//翻译
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
 		fmt.Println("[INFO]原文: " + outputString)
 	tsstart:
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -80,21 +84,10 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		}
 
 		content := resp.Choices[0].Message.Content
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleAssistant,
-			Content: content,
-		})
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
 		//处理
 		content = strings.Replace(content, "：", "|", -1)
 		content = strings.Replace(content, ":", "|", -1)
+		content = strings.Replace(content, "\n", "", -1)
 		fmt.Println("[INFO]译文: " + content)
 		//输出
 		if result != "" {
@@ -103,13 +96,9 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		//清记录,补预设
 		count++
 		if count >= 20 {
-			messages = messages[3:]
+			messages = messages[2:]
 		}
 		if count%15 == 0 {
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: translatehead,
-			})
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:    openai.ChatMessageRoleSystem,
 				Content: translatehead,
