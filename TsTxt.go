@@ -7,6 +7,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 func TsTxt(client *openai.Client, filename string, inputdir string, outputdir string, translatehead string) {
@@ -49,6 +50,7 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 
 		if err != nil {
 			fmt.Printf("[ERROR]翻译出现错误,尝试重新翻译该句,如果持续出错请重启持续或检查代理设置: %v\n", err)
+			time.Sleep(5 * time.Second)
 			goto tsstart
 		}
 

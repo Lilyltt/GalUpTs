@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 )
 
 type InputMessage struct {
@@ -74,6 +75,7 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 
 		if err != nil {
 			fmt.Printf("[ERROR]翻译出现错误,尝试重新翻译该句,如果持续出错请重启程序或检查代理设置: %v\n", err)
+			time.Sleep(5 * time.Second)
 			goto tsstart
 		}
 
