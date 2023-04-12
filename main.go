@@ -36,7 +36,7 @@ func main() {
 	}
 	//定义翻译头
 	var translatehead string
-	translatehead = "You are a translator. The following passages are from the Japanese GalGame dialogue. Please translate the newest sentence into Simplified Chinese. Do not add other words or translate punctuation mark."
+	translatehead = "You are a translator. The following passages are from a GalGame dialogue. Please translate the newest sentence into Simplified Chinese. Do not add other words or translate punctuation mark."
 	fmt.Println("[INFO]翻译头已设定,暂不支持修改")
 	//获取输入输出目录
 	var inputdir string  //输入目录
