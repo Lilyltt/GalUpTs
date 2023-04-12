@@ -24,15 +24,19 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleSystem,
+		Content: translatehead,
+	})
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleSystem,
+		Content: translatehead,
+	})
 	var count int
 	var result string
 	for scanner.Scan() {
 		//翻译
 		//加预设
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
 		fmt.Println("[INFO]原文: " + scanner.Text())
 	tsstart:
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -55,31 +59,15 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 		}
 
 		content := resp.Choices[0].Message.Content
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: translatehead,
-		})
 		//输出
 		fmt.Println("[INFO]译文: " + content)
 		result = result + content + "\n"
 		//清记录,补预设
 		count++
 		if count >= 20 {
-			messages = messages[3:]
+			messages = messages[2:]
 		}
 		if count%15 == 0 {
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: translatehead,
-			})
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:    openai.ChatMessageRoleSystem,
 				Content: translatehead,
