@@ -49,10 +49,6 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		Role:    openai.ChatMessageRoleSystem,
 		Content: translatehead,
 	})
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleSystem,
-		Content: translatehead,
-	})
 	var result string
 	var count int
 	for _, inputRecord := range inputRecords {
@@ -95,18 +91,15 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		}
 		//清记录,补预设
 		count++
+		if count == 20 {
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: translatehead,
+			})
+			messages = messages[1:]
+		}
 		if count >= 20 {
 			messages = messages[2:]
-		}
-		if count%15 == 0 {
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: translatehead,
-			})
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: translatehead,
-			})
 		}
 	}
 	fmt.Println("[INFO]翻译完毕,正在创建新文件")
