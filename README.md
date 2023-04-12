@@ -1,2 +1,5 @@
 # GalUpTs
-对已解包的格式化JSON文件实行ChatGPT自动化翻译
+对已解包的GalGame脚本文件实行ChatGPT自动化翻译
+支持设置代理地址
+支持VNTEXT提取的KRKR-SCN-JSON文件
+支持仅换行格式的TXT文件
