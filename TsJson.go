@@ -20,7 +20,7 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 	//注册翻译体
 	messages := make([]openai.ChatCompletionMessage, 0)
 	//读取文件
-	fmt.Println("[INFO]开始翻译,如果输出格式不是name|message请用ctrl+c停止程序并重新运行")
+	fmt.Println("[INFO]开始翻译,如果输出格式不是name:message请用ctrl+c停止程序并重新运行")
 	// 读取 input.json 文件
 	file, err := os.Open(inputdir + filename)
 	if err != nil {
@@ -45,19 +45,19 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		fmt.Scanln()
 		return
 	}
+
 	var result string
-	var count int
 	for _, inputRecord := range inputRecords {
 		outputString := ""
 		if inputRecord.Name != "" {
-			outputString += inputRecord.Name + "|"
+			outputString += inputRecord.Name + ":"
 		}
 		outputString += inputRecord.Message
 		//翻译
-    	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleSystem,
-		Content: translatehead,
-    	})
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: translatehead,
+		})
 		fmt.Println("[INFO]原文: " + outputString)
 	tsstart:
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -81,17 +81,15 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 
 		content := resp.Choices[0].Message.Content
 		//处理
-		content = strings.Replace(content, "：", "|", -1)
-		content = strings.Replace(content, ":", "|", -1)
+		content = strings.Replace(content, "：", ":", -1)
 		content = strings.Replace(content, "\n", "", -1)
 		fmt.Println("[INFO]译文: " + content)
 		//输出
-		if result != "" {
+		if content != "" {
 			result = result + content + "\n"
 		}
 		//清记录,补预设
-		count++
-		if count >= 20 {
+		if len(messages) >= 60 {
 			messages = messages[3:]
 		}
 	}
@@ -100,7 +98,7 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 	// 解析结果并输出到json
 	var outputMessages []InputMessage
 	for _, entry := range strings.Split(result, "\n") {
-		parts := strings.SplitN(entry, "|", 2)
+		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) > 1 {
 			outputMessages = append(outputMessages, InputMessage{Name: parts[0], Message: parts[1]})
 		} else {
