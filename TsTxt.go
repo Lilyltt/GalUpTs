@@ -25,17 +25,16 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleSystem,
-		Content: translatehead,
-	})
-	var count int
 	var result string
 	for scanner.Scan() {
 		//翻译
 		//加预设
 		fmt.Println("[INFO]原文: " + scanner.Text())
 	tsstart:
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: translatehead,
+		})
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleUser,
 			Content: scanner.Text(),
@@ -61,16 +60,8 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 		fmt.Println("[INFO]译文: " + content)
 		result = result + content + "\n"
 		//清记录,补预设
-		count++
-		if count == 20 {
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: translatehead,
-			})
-			messages = messages[1:]
-		}
-		if count >= 20 {
-			messages = messages[2:]
+		if len(messages) >= 60 {
+			messages = messages[3:]
 		}
 	}
 	fmt.Println("[INFO]翻译完毕,正在创建新文件")
