@@ -47,6 +47,8 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 	}
 
 	var result string
+	var checkcount int
+	var tempres string
 	for _, inputRecord := range inputRecords {
 		outputString := ""
 		if inputRecord.Name != "" {
@@ -54,12 +56,12 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		}
 		outputString += inputRecord.Message
 		//翻译
+	tsstart:
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
 			Content: translatehead,
 		})
 		fmt.Println("[INFO]原文: " + outputString)
-	tsstart:
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleUser,
 			Content: outputString,
@@ -80,13 +82,41 @@ func TsJson(client *openai.Client, filename string, inputdir string, outputdir s
 		}
 
 		content := resp.Choices[0].Message.Content
+		//仅标点符号校验检查
+		if OnlyMarkCheck(inputRecord.Message) {
+			if inputRecord.Name != "" {
+				tempres += inputRecord.Name + ":"
+			}
+			tempres += inputRecord.Message
+			fmt.Println("[WARN]原文仅有标点符号,跳过该句检查并保持原样输出")
+		}
+		//翻译校验检查
+		if checkcount != 0 {
+			if GptErrCheck(content) == false {
+				checkcount = 0
+			}
+		}
+		if GptErrCheck(content) {
+			checkcount++
+			if checkcount <= 5 {
+				fmt.Println("[INFO]译文: " + content)
+				messages = messages[:len(messages)-3]
+				fmt.Printf("[ERROR]翻译校验检查出问题,正在进行第 %d 次重试修正:\n", checkcount)
+				time.Sleep(5 * time.Second)
+				goto tsstart
+			} else {
+				fmt.Printf("[ERROR]翻译校验检查出问题,已进行 %d 次修正依然出错,将跳过该句:\n", checkcount)
+				checkcount = 0
+			}
+		}
 		//处理
-		content = strings.Replace(content, "：", ":", -1)
-		content = strings.Replace(content, "\n", "", -1)
-		fmt.Println("[INFO]译文: " + content)
+		tempres = content
+		tempres = strings.Replace(tempres, "：", ":", -1)
+		tempres = strings.Replace(tempres, "\n", "", -1)
+		fmt.Println("[INFO]译文: " + tempres)
 		//输出
-		if content != "" {
-			result = result + content + "\n"
+		if tempres != "" {
+			result = result + tempres + "\n"
 		}
 		//清记录,补预设
 		if len(messages) >= 60 {

@@ -26,11 +26,13 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	var result string
+	var checkcount int
+	var tempres string
 	for scanner.Scan() {
 		//翻译
 		//加预设
-		fmt.Println("[INFO]原文: " + scanner.Text())
 	tsstart:
+		fmt.Println("[INFO]原文: " + scanner.Text())
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
 			Content: translatehead,
@@ -55,10 +57,35 @@ func TsTxt(client *openai.Client, filename string, inputdir string, outputdir st
 		}
 
 		content := resp.Choices[0].Message.Content
-		content = strings.Replace(content, "\n", "", -1)
+		//仅标点符号校验检查
+		if OnlyMarkCheck(scanner.Text()) {
+			tempres = scanner.Text()
+			fmt.Println("[WARN]原文仅有标点符号,跳过该句检查并保持原样输出")
+		}
+		//翻译校验检查
+		if checkcount != 0 {
+			if GptErrCheck(content) == false {
+				checkcount = 0
+			}
+		}
+		if GptErrCheck(content) {
+			checkcount++
+			if checkcount <= 5 {
+				fmt.Println("[INFO]译文: " + content)
+				messages = messages[:len(messages)-3]
+				fmt.Printf("[ERROR]翻译校验检查出问题,正在进行第 %d 次重试修正:\n", checkcount)
+				time.Sleep(5 * time.Second)
+				goto tsstart
+			} else {
+				fmt.Printf("[ERROR]翻译校验检查出问题,已进行 %d 次修正依然出错,将跳过该句:\n", checkcount)
+				checkcount = 0
+			}
+		}
+		tempres = content
+		tempres = strings.Replace(tempres, "\n", "", -1)
 		//输出
-		fmt.Println("[INFO]译文: " + content)
-		result = result + content + "\n"
+		fmt.Println("[INFO]译文: " + tempres)
+		result = result + tempres + "\n"
 		//清记录,补预设
 		if len(messages) >= 60 {
 			messages = messages[3:]

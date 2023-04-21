@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func main() {
 	}
 	//定义翻译头
 	var translatehead string
-	translatehead = "Translate user's words to simplified Chinese.The user will send you the dialogues between characters sentence by sentence. Please only reply user the Chinese translation of current sentence. Do not reply user any other explain or add anything before translation.Do not say no or can't. Just translate, never mind the absence of context."
+	translatehead = "Translate user's words to simplified Chinese.The user will send you the text from a virtual game sentence by sentence. Please only reply user the Chinese translation of current sentence. Do not reply user any other explain or add anything before translation."
 	fmt.Println("[INFO]翻译头已设定,暂不支持修改")
 	//获取输入输出目录
 	var inputdir string  //输入目录
@@ -89,6 +91,7 @@ func main() {
 	fmt.Println("[INFO]程序执行完成,请检查你的输出目录" + outputdir + "!")
 	fmt.Scanln()
 }
+
 func SetProxy(apikey string, proxy string) *openai.Client {
 	config := openai.DefaultConfig(apikey)
 	proxyUrl, err := url.Parse(proxy)
@@ -106,4 +109,25 @@ func SetProxy(apikey string, proxy string) *openai.Client {
 	}
 	client := openai.NewClientWithConfig(config)
 	return client
+} //代理设置函数
+
+func GptErrCheck(target string) bool {
+	for _, r := range target {
+		if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
+			return true
+		}
+	}
+	if strings.Contains(target, "sorry") || strings.Contains(target, "Sorry") || strings.Contains(target, "Translate") || strings.Contains(target, "Translation") || strings.Contains(target, "translate") || strings.Contains(target, "translation") || strings.Contains(target, "上下文") || strings.Contains(target, "翻译") {
+		return true
+	}
+	return false
+} //校验检查函数
+
+func OnlyMarkCheck(target string) bool {
+	for _, c := range target {
+		if !unicode.IsPunct(c) && !unicode.IsSpace(c) {
+			return false
+		}
+	}
+	return true
 }
